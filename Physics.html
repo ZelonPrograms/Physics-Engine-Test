@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Physics Engine with Menu</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+            font-family: 'Arial', sans-serif;
+        }
+
+        #menu {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 5px;
+            z-index: 10;
+        }
+
+        #menu input {
+            margin-bottom: 10px;
+        }
+
+        #menu button {
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Menu for controlling the simulation -->
+    <div id="menu">
+        <label>Gravity Y:</label>
+        <input type="number" id="gravityY" value="-0.05" step="0.01"><br>
+
+        <label>Wind X:</label>
+        <input type="number" id="windX" value="0" step="0.01"><br>
+
+        <label>Number of Objects:</label>
+        <input type="number" id="numObjects" value="10"><br>
+
+        <label>Object Size:</label>
+        <input type="number" id="objSize" value="1" step="0.1"><br>
+
+        <button onclick="restartSimulation()">Restart Simulation</button><br>
+        <button onclick="startRecording()">Start Recording</button>
+        <button onclick="stopRecording()">Stop & Save Recording</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ccapture.js/1.1.0/CCapture.all.min.js"></script>
+    <script>
+        // Core physics engine variables
+        let scene, camera, renderer, objects = [];
+        let gravity = new THREE.Vector3(0, -0.05, 0);
+        let wind = new THREE.Vector3(0, 0, 0);
+        let recordData = [], recording = false, capturer;
+
+        // Initialize 3D scene and physics
+        function init() {
+            // Setup scene, camera, and renderer
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Add light
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(0, 10, 10).normalize();
+            scene.add(light);
+
+            // Set up the camera position
+            camera.position.set(0, 5, 10);
+            camera.lookAt(0, 0, 0);
+        }
+
+        // Function to create a new object (ball or cube)
+        function createObject(size) {
+            const geometry = Math.random() > 0.5 ? new THREE.SphereGeometry(size, 32, 32) : new THREE.BoxGeometry(size, size, size);
+            const material = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
+            const object = new THREE.Mesh(geometry, material);
+
+            // Random starting position
+            object.position.set(Math.random() * 10 - 5, 5, Math.random() * 10 - 5);
+            object.velocity = new THREE.Vector3((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.2);
+
+            scene.add(object);
+            objects.push(object);
+        }
+
+        // Handle object collisions with ground
+        function handleCollisions(object, groundLevel = -2) {
+            if (object.position.y - 1 <= groundLevel) {
+                object.velocity.y *= -0.8;
+                object.position.y = groundLevel + 1;
+            }
+        }
+
+        // Update physics
+        function updatePhysics() {
+            objects.forEach(obj => {
+                obj.velocity.add(gravity).add(wind); // Apply gravity and wind
+                obj.position.add(obj.velocity);
+                handleCollisions(obj);
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePhysics();
+            if (recording) capturer.capture(renderer.domElement);
+            renderer.render(scene, camera);
+        }
+
+        // Restart the simulation based on menu settings
+        function restartSimulation() {
+            const numObjects = parseInt(document.getElementById('numObjects').value);
+            const objSize = parseFloat(document.getElementById('objSize').value);
+            const gravityY = parseFloat(document.getElementById('gravityY').value);
+            const windX = parseFloat(document.getElementById('windX').value);
+
+            // Reset gravity and wind
+            gravity.set(0, gravityY, 0);
+            wind.set(windX, 0, 0);
+
+            // Clear old objects
+            objects.forEach(obj => scene.remove(obj));
+            objects = [];
+
+            // Create new objects
+            for (let i = 0; i < numObjects; i++) {
+                createObject(objSize);
+            }
+        }
+
+        // Start recording the animation
+        function startRecording() {
+            recording = true;
+            recordData = [];
+            capturer = new CCapture({ format: 'webm', framerate: 30 });
+            capturer.start();
+            console.log('Recording started...');
+        }
+
+        // Stop recording and save the video
+        function stopRecording() {
+            recording = false;
+            capturer.stop();
+            capturer.save();
+            console.log('Recording stopped and saved.');
+        }
+
+        // Initialize everything and start animation
+        init();
+        restartSimulation();
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>
